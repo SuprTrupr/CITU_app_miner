@@ -10,9 +10,35 @@ import requests
 import re
 
 
+def set_java_home(queue):
+    possible_paths = [
+        "C:\\Program Files\\Java",
+        "C:\\Program Files (x86)\\Java"
+    ]
+
+    queue.put("Searching for Java installations...")
+
+    for path in possible_paths:
+        if os.path.exists(path):
+            queue.put(f"Checking path: {path}")
+            java_versions = sorted(os.listdir(path), reverse=True)  # Seřadí verze sestupně
+            if java_versions:
+                java_home = os.path.join(path, java_versions[0])  # Vybere nejnovější
+                os.environ['JAVA_HOME'] = java_home
+                queue.put(f"JAVA_HOME set to: {java_home}")
+                return java_home
+            else:
+                queue.put(f"No Java versions found in {path}")
+        else:
+            queue.put(f"Path does not exist: {path}")
+
+    queue.put("Error: Java installation not found.")
+    return None
+
+
 def perform_http_post_form(url, data):
     try:
-        response = requests.post(url, data=data)  # Changed to use form data instead of JSON
+        response = requests.post(url, data=data)
         return response.json()
     except Exception as e:
         return {"error": str(e)}
@@ -118,7 +144,6 @@ class Application(tk.Tk):
         self.global_info.grid(row=1, column=0, padx=10, pady=10, sticky=tk.W)
         self.global_info.insert(tk.END, "Global blocks")
 
-        # Button for updating blockchain
         update_blockchain_button = tk.Button(info_frame, text="Update Blockchain", command=self.update_blockchain,
                                              bg='lightgrey')
         update_blockchain_button.grid(row=1, column=1, padx=5, pady=5, sticky=tk.W)
@@ -126,7 +151,6 @@ class Application(tk.Tk):
         self.combined_info = tk.Text(info_frame, height=3, width=45, bg='lightblue')
         self.combined_info.grid(row=3, column=0, padx=10, pady=10, sticky=tk.W)
 
-        # Button for refreshing combined info
         refresh_combined_button = tk.Button(info_frame, text="Refresh Balance", command=self.refresh_combined_info,
                                             bg='lightgrey')
         refresh_combined_button.grid(row=3, column=1, padx=5, pady=5, sticky=tk.W)
@@ -140,24 +164,22 @@ class Application(tk.Tk):
 
     def refresh_combined_info(self):
         try:
-            with open(r"C:\resources\server\server.txt", "r") as server_file:
+            with open(r"C:\\resources\\server\\server.txt", "r") as server_file:
                 server_ip = server_file.read().strip()
 
-            with open(r"C:\resources\minerAccount\minerAccount.txt", "r") as account_file:
+            with open(r"C:\\resources\\minerAccount\\minerAccount.txt", "r") as account_file:
                 miner_account = account_file.read().strip()
 
             combined_url = f"{server_ip}/account?address={miner_account}"
             response = requests.get(combined_url)
 
             if response.status_code == 200:
-                data = response.json()  # Assuming the response is JSON
+                data = response.json()
 
-                # Extract relevant values
                 digital_dollar_balance = data.get("digitalDollarBalance", "N/A")
                 digital_stock_balance = data.get("digitalStockBalance", "N/A")
                 digital_staking_balance = data.get("digitalStakingBalance", "N/A")
 
-                # Format the output
                 formatted_output = (
                     f"Digital Dollar Balance: {digital_dollar_balance}\n"
                     f"Digital Stock Balance: {digital_stock_balance}\n"
@@ -175,7 +197,7 @@ class Application(tk.Tk):
 
     def update_local_info(self):
         try:
-            with open(r"C:\resources\tempblockchain\shortBlockchain.txt", "r") as file:
+            with open(r"C:\\resources\\tempblockchain\\shortBlockchain.txt", "r") as file:
                 data = json.load(file)
                 size = data.get("size", "N/A")
                 self.local_info.delete(1.0, tk.END)
@@ -184,11 +206,11 @@ class Application(tk.Tk):
             self.local_info.delete(1.0, tk.END)
             self.local_info.insert(tk.END, f"Error reading Local info: {str(e)}")
 
-        self.after(10000, self.update_local_info)  # Update every 10 seconds
+        self.after(10000, self.update_local_info)
 
     def update_global_info(self):
         try:
-            with open(r"C:\resources\server\server.txt", "r") as file:
+            with open(r"C:\\resources\\server\\server.txt", "r") as file:
                 server_ip = file.read().strip()
                 url = f"{server_ip}/size"
                 data = perform_http_get(url)
@@ -198,11 +220,11 @@ class Application(tk.Tk):
             self.global_info.delete(1.0, tk.END)
             self.global_info.insert(tk.END, f"Error reading Global info: {str(e)}")
 
-        self.after(10000, self.update_global_info)  # Update every 300 seconds
+        self.after(10000, self.update_global_info)
 
     def update_info_from_file(self):
         try:
-            with open(r"C:\resources\minerAccount\minerAccount.txt", "r") as file:
+            with open(r"C:\\resources\\minerAccount\\minerAccount.txt", "r") as file:
                 account_info = file.read().strip()
                 if not account_info:
                     account_info = "BUDGET"
@@ -212,7 +234,7 @@ class Application(tk.Tk):
             self.miner_account_info.delete(1.0, tk.END)
             self.miner_account_info.insert(tk.END, f"Error reading Miner Account info: {str(e)}")
 
-        self.after(600000, self.update_info_from_file)  # Update every 600 seconds
+        self.after(600000, self.update_info_from_file)
 
     def create_wallet_tab(self):
         wallet_tab = ttk.Frame(self.notebook)
@@ -238,8 +260,6 @@ class Application(tk.Tk):
                                    bg='lightgrey')
         refresh_button.grid(row=2, column=2, padx=5, pady=5, sticky=tk.W)
 
-        # New Section for Server Dropdown and Form
-
         form_label = tk.Label(wallet_frame, text="Choose Server", bg='lightblue')
         form_label.grid(row=4, column=0, padx=5, pady=5, sticky=tk.W)
 
@@ -253,7 +273,7 @@ class Application(tk.Tk):
 
     def refresh_miner_account_info(self):
         try:
-            with open(r"C:\resources\minerAccount\minerAccount.txt", "r") as file:
+            with open(r"C:\\resources\\minerAccount\\minerAccount.txt", "r") as file:
                 account_info = file.read().strip()
                 if not account_info:
                     account_info = "BUDGET"
@@ -276,7 +296,6 @@ class Application(tk.Tk):
         self.console.insert(tk.END, f"Sending request to set miner address: {miner_address}\n")
         threading.Thread(target=perform_http_post_form, args=(url, data)).start()
 
-        # Update wallet address in info tab
         self.wallet_address_info.delete(1.0, tk.END)
         self.wallet_address_info.insert(tk.END, miner_address)
 
@@ -300,16 +319,14 @@ class Application(tk.Tk):
         difficulty_label = tk.Label(mining_frame, text="Difficulty", bg='lightblue')
         difficulty_label.grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
 
-        # Combobox for selecting difficulty
         self.difficulty_combobox = ttk.Combobox(mining_frame, values=[str(i) for i in range(17, 100)], width=10)
         self.difficulty_combobox.grid(row=0, column=1, padx=5, pady=5)
-        self.difficulty_combobox.set("17")  # Set default value
+        self.difficulty_combobox.set("17")
 
         confirm_button_difficulty = tk.Button(mining_frame, text="Confirm", command=self.confirm_difficulty,
                                               bg='lightgrey')
         confirm_button_difficulty.grid(row=0, column=2, padx=5, pady=5)
 
-        # Spacer (empty row)
         spacer = tk.Frame(mining_frame, height=30, bg='lightblue')
         spacer.grid(row=1, column=0, columnspan=3)
 
@@ -352,7 +369,6 @@ class Application(tk.Tk):
         staking_frame = tk.Frame(staking_tab, bg='lightblue')
         staking_frame.pack(side=tk.TOP, fill=tk.X, padx=10, pady=10)
 
-        # Staking Form
         staking_label = tk.Label(staking_frame, text="Address", bg='lightblue')
         staking_label.grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
 
@@ -377,13 +393,10 @@ class Application(tk.Tk):
                                                                    staking_password_entry.get()), bg='lightgrey')
         staking_button.grid(row=3, column=1, padx=5, pady=5, sticky=tk.W)
 
-        # Unstaking Form
-
         unstaking_button = tk.Button(staking_frame, text="Unstaking",
                                      command=lambda: process_unstaking(staking_address_entry.get(),
                                                                        staking_dollar_entry.get(),
-                                                                       staking_password_entry.get()),
-                                     bg='lightgrey')
+                                                                       staking_password_entry.get()), bg='lightgrey')
         unstaking_button.grid(row=3, column=1, padx=5, pady=5, sticky=tk.E)
 
     def create_create_account_tab(self):
@@ -422,7 +435,6 @@ class Application(tk.Tk):
                 pub_key = keys_data.get("pubKey", "")
                 priv_key = keys_data.get("privKey", "")
 
-                # Update GUI fields
                 self.pub_key_entry.delete(0, tk.END)
                 self.pub_key_entry.insert(tk.END, pub_key)
 
@@ -500,11 +512,15 @@ class Application(tk.Tk):
 
     def run_java_jar(self):
         java_home = os.getenv('JAVA_HOME')
-        if java_home:
-            java_exe = os.path.join(java_home, "bin", "java.exe")
-        else:
-            self.queue.put("Error: JAVA_HOME environment variable is not set.")
-            return
+        if not java_home:
+            java_home = set_java_home(self.queue)  # Předáváme správnou frontu
+            if java_home:
+                self.queue.put(f"JAVA_HOME set to {java_home}")
+            else:
+                self.queue.put("Error: Unable to find Java installation.")
+                return
+
+        java_exe = os.path.join(java_home, "bin", "java.exe")
 
         # Zjistí dostupné verze na GitHubu
         github_url = "https://github.com/CorporateFounder/unitedStates_final/raw/master/target/"
@@ -573,22 +589,11 @@ class Application(tk.Tk):
         self.destroy()
 
     def check_queue(self):
-        current_time = time.time()
-        if current_time - self.last_update_time >= 0.1:
-            lines = []
-            with self.queue_lock:
-                while not self.queue.empty():
-                    lines.append(self.queue.get_nowait())
-                if self.output_buffer:
-                    lines.append('\n'.join(self.output_buffer))
-                    self.output_buffer.clear()
-
-            if lines:
-                self.console.insert(tk.END, '\n'.join(lines) + '\n')
-                self.console.see(tk.END)
-                self.last_update_time = current_time
-
-        self.after(10, self.check_queue)
+        while not self.queue.empty():
+            message = self.queue.get_nowait()
+            self.console.insert(tk.END, message + "\n")
+            self.console.see(tk.END)
+        self.after(100, self.check_queue)
 
 
 if __name__ == "__main__":
