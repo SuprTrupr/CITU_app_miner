@@ -17,3 +17,6 @@ v1.0.2 ***NEWS***
 Fixed some bugs
 Only 2 decimal places can be entered for coins actions, as required by bloickchain.
 ===================================================================================
+
+v1.0.3 ***NEWS***
+Fixed bug when sending STAKING and UNSTAKING
