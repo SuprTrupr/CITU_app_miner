@@ -24,4 +24,5 @@ Only 2 decimal places can be entered for coins actions, as required by bloickcha
 ===================================================================================
 
 v1.0.3 ***NEWS***
+
 Fixed bug when sending STAKING and UNSTAKING
