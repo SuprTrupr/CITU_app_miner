@@ -9,8 +9,18 @@ import time
 import requests
 import re
 
+import os
+import subprocess
+
 
 def set_java_home(queue):
+    # Kontrola, zda je JAVA_HOME již nastavena a existuje
+    if 'JAVA_HOME' in os.environ and os.path.exists(os.environ['JAVA_HOME']):
+        java_home = os.environ['JAVA_HOME']
+        queue.put(f"JAVA_HOME is already set to: {java_home}")
+        return java_home
+
+    # Definice možných cest
     possible_paths = [
         "C:\\Program Files\\Java",
         "C:\\Program Files (x86)\\Java"
@@ -18,22 +28,39 @@ def set_java_home(queue):
 
     queue.put("Searching for Java installations...")
 
+    available_versions = []
+
+    # Hledání JDK v možných cestách
     for path in possible_paths:
         if os.path.exists(path):
             queue.put(f"Checking path: {path}")
             java_versions = sorted(os.listdir(path), reverse=True)  # Seřadí verze sestupně
-            if java_versions:
-                java_home = os.path.join(path, java_versions[0])  # Vybere nejnovější
-                os.environ['JAVA_HOME'] = java_home
-                queue.put(f"JAVA_HOME set to: {java_home}")
-                return java_home
-            else:
-                queue.put(f"No Java versions found in {path}")
-        else:
-            queue.put(f"Path does not exist: {path}")
+            for version in java_versions:
+                full_path = os.path.join(path, version)
+                if os.path.isdir(full_path):  # Ověří, že se jedná o složku
+                    available_versions.append(full_path)
 
-    queue.put("Error: Java installation not found.")
-    return None
+    # Pokud nejsou nalezeny žádné verze
+    if not available_versions:
+        queue.put("Error: No Java installations found.")
+        return None
+
+    # Automaticky vybere nejnovější verzi
+    java_home = available_versions[0]
+    queue.put(f"Detected latest JDK version: {java_home}")
+
+    # Nastavení JAVA_HOME v aktuálním procesu
+    os.environ['JAVA_HOME'] = java_home
+    queue.put(f"JAVA_HOME temporarily set to: {java_home}")
+
+    # Trvalé nastavení pomocí setx
+    try:
+        subprocess.run(['setx', 'JAVA_HOME', java_home], check=True)
+        queue.put(f"JAVA_HOME successfully added to system environment variables: {java_home}")
+    except subprocess.CalledProcessError as e:
+        queue.put(f"Failed to add JAVA_HOME to system environment variables. Error: {e}")
+
+    return java_home
 
 
 def perform_http_post_form(url, data):
@@ -378,25 +405,28 @@ class Application(tk.Tk):
         staking_label = tk.Label(staking_frame, text="Password", bg='lightblue')
         staking_label.grid(row=2, column=0, padx=5, pady=5, sticky=tk.W)
 
+        # Validation for decimal fields
+        validate_command = staking_frame.register(self.validate_decimal)
+
         staking_address_entry = tk.Entry(staking_frame, width=55)
         staking_address_entry.grid(row=0, column=1, padx=5, pady=5, sticky=tk.W)
 
-        staking_dollar_entry = tk.Entry(staking_frame, width=55)
+        staking_dollar_entry = tk.Entry(staking_frame, width=55, validate="key", validatecommand=(validate_command, "%P"))
         staking_dollar_entry.grid(row=1, column=1, padx=5, pady=5, sticky=tk.W)
 
         staking_password_entry = tk.Entry(staking_frame, width=55)
         staking_password_entry.grid(row=2, column=1, padx=5, pady=5, sticky=tk.W)
 
         staking_button = tk.Button(staking_frame, text="Staking",
-                                   command=lambda: process_staking(staking_address_entry.get(),
-                                                                   staking_dollar_entry.get(),
-                                                                   staking_password_entry.get()), bg='lightgrey')
+                                   command=lambda: self.process_staking(staking_address_entry.get(),
+                                                                        staking_dollar_entry.get(),
+                                                                        staking_password_entry.get()), bg='lightgrey')
         staking_button.grid(row=3, column=1, padx=5, pady=5, sticky=tk.W)
 
         unstaking_button = tk.Button(staking_frame, text="Unstaking",
-                                     command=lambda: process_unstaking(staking_address_entry.get(),
-                                                                       staking_dollar_entry.get(),
-                                                                       staking_password_entry.get()), bg='lightgrey')
+                                     command=lambda: self.process_unstaking(staking_address_entry.get(),
+                                                                             staking_dollar_entry.get(),
+                                                                             staking_password_entry.get()), bg='lightgrey')
         unstaking_button.grid(row=3, column=1, padx=5, pady=5, sticky=tk.E)
 
     def create_create_account_tab(self):
@@ -464,6 +494,23 @@ class Application(tk.Tk):
         except Exception as e:
             self.console.insert(tk.END, f"Error creating backup file: {str(e)}\n")
 
+    def validate_decimal(self, new_value):
+        """
+        Validates that the input is a valid decimal number with up to two decimal places.
+        """
+        if new_value == "" or re.match(r'^\d*\.?\d{0,2}$', new_value):
+            return True
+        return False
+
+    def toggle_password(self, entry):
+        """
+        Toggles the visibility of the password field.
+        """
+        if entry.cget('show') == "":
+            entry.config(show="*")
+        else:
+            entry.config(show="")
+
     def create_send_coin_tab(self):
         send_coin_tab = ttk.Frame(self.notebook)
         self.notebook.add(send_coin_tab, text=' Sending Coins ')
@@ -474,11 +521,27 @@ class Application(tk.Tk):
         labels = ["Sender", "Recipient", "Dollar", "Stock", "Reward", "Password"]
         self.entries = {}
 
+        # Validation for decimal fields
+        validate_command = send_coin_frame.register(self.validate_decimal)
+
         for idx, label in enumerate(labels):
             tk.Label(send_coin_frame, text=label, bg='lightblue').grid(row=idx, column=0, padx=5, pady=5, sticky=tk.W)
             entry = ttk.Entry(send_coin_frame, width=55)
+
+            # Apply validation to specific fields
+            if label in ["Dollar", "Stock", "Reward"]:
+                entry.insert(0, "0.0")
+                entry.config(validate="key", validatecommand=(validate_command, "%P"))
+
             entry.grid(row=idx, column=1, padx=5, pady=5, sticky=tk.W)
             self.entries[label.lower()] = entry
+
+            # Button to toggle password visibility
+            if label == "Password":
+                show_password_button = tk.Button(
+                    send_coin_frame, text="Show", command=lambda e=entry: self.toggle_password(e), bg='lightgrey'
+                )
+                show_password_button.grid(row=idx, column=2, padx=5, pady=5, sticky=tk.W)
 
         send_button = tk.Button(send_coin_frame, text="Send", command=self.send_coin, bg='lightgrey')
         send_button.grid(row=len(labels), column=1, padx=5, pady=5, sticky=tk.W)
@@ -515,7 +578,8 @@ class Application(tk.Tk):
         if not java_home:
             java_home = set_java_home(self.queue)  # Předáváme správnou frontu
             if java_home:
-                self.queue.put(f"JAVA_HOME set to {java_home}")
+                self.queue.put(
+                    f"****************************************************************************************")
             else:
                 self.queue.put("Error: Unable to find Java installation.")
                 return
@@ -574,7 +638,7 @@ class Application(tk.Tk):
             for line in iter(self.java_process.stdout.readline, ''):
                 with self.queue_lock:
                     self.output_buffer.append(line.strip())
-                    if len(self.output_buffer) >= 10:
+                    if len(self.output_buffer) >= 1:
                         self.queue.put('\n'.join(self.output_buffer))
                         self.output_buffer.clear()
 
