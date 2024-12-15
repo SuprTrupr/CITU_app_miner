@@ -1,5 +1,8 @@
 # CITU app & miner
 
+How to use?
+http://citucorp.com/mining-app-guide-win
+
 v1.0.0
 
 On startup, it will always check if the .jar version is up to date and update if a newer version is available.
