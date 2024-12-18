@@ -1,16 +1,13 @@
-import customtkinter as ctk
-import tkinter as tk
-from tkinter import scrolledtext
-import requests
-import threading
-import os
 import json
+import os
 import queue
-import subprocess
 import re
-import time
+import subprocess
+import threading
+import tkinter as tk
 
-from pandas.core import frame
+import customtkinter as ctk
+import requests
 
 # Inicializace stylu
 ctk.set_appearance_mode("light")  # Světlý režim, možnost 'dark' pro tmavý
@@ -87,6 +84,7 @@ class Application(ctk.CTk):
     def __init__(self):
         super().__init__()
 
+        # Nastavení okna
         self.title("Welcome to the future with CITU")
         self.geometry("900x900")
         self.configure(fg_color="#B0B0B0")
@@ -503,15 +501,22 @@ class Application(ctk.CTk):
             return {"error": str(e)}
 
     def update_blockchain(self):
-        threading.Thread(target=self._update_blockchain).start()
+        # Spustí aktualizaci v jiném vlákně
+        threading.Thread(target=self._update_blockchain, daemon=True).start()
 
     def _update_blockchain(self):
         url = "http://localhost:8082/resolving"
-        response = requests.get(url)
-        if response.status_code == 200:
-            self.console.insert(tk.END, f"Blockchain updated successfully.\n")
-        else:
-            self.console.insert(tk.END, f"Failed to update blockchain.\n")
+        try:
+            response = requests.get(url, timeout=10)
+            if response.status_code == 200:
+                message = "Blockchain updated successfully.\n"
+            else:
+                message = f"Failed to update blockchain. Status code: {response.status_code}\n"
+        except Exception as e:
+            message = f"Error updating blockchain: {str(e)}\n"
+
+        # Výsledek vloží do fronty, aby ho GUI zpracovalo
+        self.queue.put(message)
 
     def update_local_info(self):
         try:
@@ -806,6 +811,7 @@ class Application(ctk.CTk):
                 self.console.insert(tk.END, f"Error fetching keys: Status code {response.status_code}\n")
         except Exception as e:
             self.console.insert(tk.END, f"Error fetching keys: {str(e)}\n")
+
     def create_backup_file(self):
         pub_key = self.pub_key_entry.get()
         priv_key = self.priv_key_entry.get()
@@ -993,12 +999,23 @@ class Application(ctk.CTk):
             except subprocess.TimeoutExpired:
                 self.java_process.kill()  # Pokud proces neodpovídá, násilně ho ukončí
         self.destroy()  # Zavře GUI aplikaci
+
+    def update_console(self, message):
+        """Bezpečná aktualizace konzole, zarovnání zpráv pod sebou."""
+        if not message.endswith("\n"):
+            message += "\n"  # Přidá nový řádek, pokud chybí
+        self.console.insert(tk.END, message)  # Vloží text na konec
+        self.console.see(tk.END)  # Posune konzoli na konec
+
     def check_queue(self):
+        """Pravidelně kontroluje frontu a zajišťuje zobrazení zpráv pod sebou."""
         while not self.queue.empty():
-            message = self.queue.get_nowait()
-            self.console.insert(tk.END, message + "\n")
-            self.console.see(tk.END)
-        self.after(100, self.check_queue)
+            try:
+                message = self.queue.get_nowait()
+                self.after(0, self.update_console, message)  # Bezpečné volání do hlavního vlákna
+            except queue.Empty:
+                pass
+        self.after(10, self.check_queue)  # Pravidelná kontrola fronty
 
 
 if __name__ == "__main__":
