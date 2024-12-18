@@ -46,3 +46,10 @@ Fixed termination of java process when application exits.
 ![{1E4410FC-A3A2-404D-8539-F5C6882E8343}](https://github.com/user-attachments/assets/0dc97688-4cc0-4fa6-9d48-3668d52d2d66)
 
 ==========================================================================
+
+v1.0.5 ***NEWS***
+
+fix application stuttering during "updateblockchain"
+
+==========================================================================
+
