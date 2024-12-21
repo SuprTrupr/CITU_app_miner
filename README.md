@@ -50,6 +50,7 @@ Fixed termination of java process when application exits.
 v1.0.5 ***NEWS***
 
 fix application stuttering during "updateblockchain"
+added selection of number of threads
 
 ==========================================================================
 
